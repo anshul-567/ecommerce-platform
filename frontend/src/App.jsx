@@ -6,6 +6,7 @@ import ProductDetail from './pages/ProductDetail';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Cart from './pages/Cart';
+import Wishlist from './pages/Wishlist';
 import Checkout from './pages/Checkout';
 import { OrderList, OrderDetail } from './pages/Orders';
 import AdminDashboard from './pages/AdminDashboard';
@@ -19,6 +20,7 @@ export default function App() {
         <Route path="/products/:id" element={<ProductDetail />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/wishlist" element={<Wishlist />} />
         <Route path="/cart" element={<PrivateRoute><Cart /></PrivateRoute>} />
         <Route path="/checkout" element={<PrivateRoute><Checkout /></PrivateRoute>} />
         <Route path="/orders" element={<PrivateRoute><OrderList /></PrivateRoute>} />
@@ -28,3 +30,4 @@ export default function App() {
     </>
   );
 }
+

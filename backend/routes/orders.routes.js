@@ -110,4 +110,54 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// PUT /api/orders/:id/cancel - user or admin can cancel an order if status is pending
+router.put('/:id/cancel', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const orderResult = await client.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [req.params.id]);
+    const order = orderResult.rows[0];
+
+    if (!order) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Order not found.' });
+    }
+    if (order.user_id !== req.user.id && req.user.role !== 'admin') {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ message: 'Not authorized to cancel this order.' });
+    }
+    if (order.status !== 'pending') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: `Cannot cancel an order that is already ${order.status}.` });
+    }
+
+    // Restore product stock
+    const itemsResult = await client.query('SELECT * FROM order_items WHERE order_id = $1', [order.id]);
+    for (const item of itemsResult.rows) {
+      if (item.product_id) {
+        await client.query('UPDATE products SET stock = stock + $1 WHERE id = $2', [
+          item.quantity,
+          item.product_id,
+        ]);
+      }
+    }
+
+    const updated = await client.query(
+      `UPDATE orders SET status = 'cancelled' WHERE id = $1 RETURNING *`,
+      [order.id]
+    );
+
+    await client.query('COMMIT');
+    res.json({ message: 'Order cancelled successfully.', order: updated.rows[0] });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ message: 'Server error cancelling order.' });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;
+

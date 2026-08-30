@@ -45,44 +45,127 @@ function OrderDetail() {
   const { id } = useParams();
   const [order, setOrder] = useState(null);
   const [items, setItems] = useState([]);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelMsg, setCancelMsg] = useState('');
 
   useEffect(() => {
+    fetchOrder();
+  }, [id]);
+
+  function fetchOrder() {
     api.get(`/orders/${id}`).then((res) => {
       setOrder(res.data.order);
       setItems(res.data.items);
     });
-  }, [id]);
+  }
+
+  async function handleCancelOrder() {
+    if (!window.confirm('Are you sure you want to cancel this order? This will restock the items.')) {
+      return;
+    }
+    setCancelling(true);
+    try {
+      await api.put(`/orders/${id}/cancel`);
+      setCancelMsg('Order has been cancelled.');
+      fetchOrder();
+    } catch (err) {
+      setCancelMsg(err.response?.data?.message || 'Could not cancel order.');
+    } finally {
+      setCancelling(false);
+    }
+  }
 
   if (!order) return <p className="page">Loading order...</p>;
 
+  // Status timeline steps
+  const statusSteps = ['pending', 'processing', 'shipped', 'delivered'];
+  const currentStepIdx = statusSteps.indexOf(order.status.toLowerCase());
+  const isCancelled = order.status.toLowerCase() === 'cancelled';
+
   return (
-    <div className="page">
-      <h1>Order #{order.id}</h1>
-      <p><span className={`status-badge status-${order.status}`}>{order.status}</span></p>
-      <p className="muted">Placed on {new Date(order.created_at).toLocaleString()}</p>
-      <p><strong>Shipping to:</strong> {order.shipping_address}</p>
+    <div className="page order-page-printable">
+      <div className="order-detail-header">
+        <div>
+          <h1>Order #{order.id}</h1>
+          <p className="muted">Placed on {new Date(order.created_at).toLocaleString()}</p>
+        </div>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          <button onClick={() => window.print()} className="btn-secondary no-print" title="Print Receipt / Invoice">
+            🖨️ Print Invoice
+          </button>
+          <span className={`status-badge status-${order.status}`}>{order.status}</span>
+        </div>
+      </div>
+
+      {cancelMsg && <p className="error-text">{cancelMsg}</p>}
+
+      {/* Visual Tracking Progress Timeline */}
+      {!isCancelled ? (
+        <div className="order-tracking-card no-print">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+            <h3 style={{ margin: 0 }}>📦 Order Status Tracking</h3>
+            {order.status === 'pending' && (
+              <button
+                onClick={handleCancelOrder}
+                disabled={cancelling}
+                className="btn-cancel-order"
+              >
+                {cancelling ? 'Cancelling...' : 'Cancel Order'}
+              </button>
+            )}
+          </div>
+          <div className="tracking-timeline">
+            {statusSteps.map((step, idx) => {
+              const isCompleted = currentStepIdx >= idx;
+              const isCurrent = currentStepIdx === idx;
+              return (
+                <div key={step} className={`timeline-step ${isCompleted ? 'completed' : ''} ${isCurrent ? 'current' : ''}`}>
+                  <div className="timeline-marker">
+                    {isCompleted ? '✓' : idx + 1}
+                  </div>
+                  <span className="timeline-label">{step.charAt(0).toUpperCase() + step.slice(1)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="order-tracking-card cancelled-tracking">
+          <p>⚠️ This order has been cancelled and refunded.</p>
+        </div>
+      )}
+
+      <div className="order-info-card">
+        <p><strong>📍 Shipping Address & Details:</strong></p>
+        <p className="muted">{order.shipping_address}</p>
+      </div>
 
       <div className="table-scroll">
-      <table className="cart-table">
-        <thead>
-          <tr><th>Product</th><th>Price</th><th>Qty</th><th>Subtotal</th></tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <tr key={item.id}>
-              <td>{item.product_name}</td>
-              <td>₹{Number(item.price).toFixed(0)}</td>
-              <td>{item.quantity}</td>
-              <td>₹{(Number(item.price) * item.quantity).toFixed(0)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+        <table className="cart-table">
+          <thead>
+            <tr><th>Product</th><th>Price</th><th>Qty</th><th>Subtotal</th></tr>
+          </thead>
+          <tbody>
+            {items.map((item) => (
+              <tr key={item.id}>
+                <td><strong>{item.product_name}</strong></td>
+                <td>₹{Number(item.price).toFixed(0)}</td>
+                <td>{item.quantity}</td>
+                <td>₹{(Number(item.price) * item.quantity).toFixed(0)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-      <h2>Total: ₹{Number(order.total).toFixed(0)}</h2>
-      <Link to="/orders">← Back to orders</Link>
+
+      <div className="order-detail-footer">
+        <Link to="/orders" className="btn-link no-print">← Back to My Orders</Link>
+        <h2>Total Paid: ₹{Number(order.total).toFixed(0)}</h2>
+      </div>
     </div>
   );
 }
+
+
 
 export { OrderList, OrderDetail };

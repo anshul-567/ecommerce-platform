@@ -4,6 +4,19 @@ const { requireAuth, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
+// GET /api/products/categories - list distinct categories
+router.get('/categories', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != '' ORDER BY category ASC`
+    );
+    res.json({ categories: result.rows.map((r) => r.category) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error fetching categories.' });
+  }
+});
+
 // GET /api/products - list all products, optional ?category=&search=
 router.get('/', async (req, res) => {
   try {
